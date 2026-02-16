@@ -6,7 +6,11 @@
 # 3. Starts a background sync to backup config to R2
 # 4. Starts the gateway
 
-set -e
+#set -e
+
+echo "=== Moltbot Startup $(date) ==="
+echo "Node: $(node --version 2>&1 || echo 'NOT FOUND')"
+echo "Clawdbot: $(clawdbot --version 2>&1 || echo 'NOT FOUND')"
 
 # Check if clawdbot gateway is already running - bail early if so
 # Note: CLI is still named "clawdbot" until upstream renames it

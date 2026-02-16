@@ -31,4 +31,3 @@ WORKDIR /root/clawd
 EXPOSE 18789
 
 ENTRYPOINT ["/sandbox"]
-CMD ["/usr/local/bin/start-moltbot.sh"]

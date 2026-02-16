@@ -21,7 +21,7 @@
  */
 
 import { Hono } from 'hono';
-import { getSandbox, Sandbox, type SandboxOptions } from '@cloudflare/sandbox';
+import { getSandbox, Sandbox as BaseSandbox, type SandboxOptions } from '@cloudflare/sandbox';
 
 import type { AppEnv, MoltbotEnv } from './types';
 import { MOLTBOT_PORT } from './config';
@@ -46,7 +46,14 @@ function transformErrorMessage(message: string, host: string): string {
   return message;
 }
 
-export { Sandbox };
+/**
+ * Custom Sandbox subclass that sets the default port to match the Moltbot gateway port.
+ * The base Sandbox class defaults to port 3000, but moltbot listens on 18789.
+ * The container health check uses defaultPort to determine if the container is ready.
+ */
+export class Sandbox extends BaseSandbox {
+  defaultPort = MOLTBOT_PORT;
+}
 
 /**
  * Validate required environment variables.
@@ -124,7 +131,7 @@ app.use('*', async (c, next) => {
 // Middleware: Initialize sandbox for all requests
 app.use('*', async (c, next) => {
   const options = buildSandboxOptions(c.env);
-  const sandbox = getSandbox(c.env.Sandbox, 'moltbot', options);
+  const sandbox = getSandbox(c.env.Sandbox, 'moltbot-v2', options);
   c.set('sandbox', sandbox);
   await next();
 });

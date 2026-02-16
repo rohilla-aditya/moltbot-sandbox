@@ -42,3 +42,7 @@ WORKDIR /root/clawd
 
 # Expose the gateway port
 EXPOSE 18789
+
+# At the end of your Dockerfile
+ENTRYPOINT ["/sandbox"]
+CMD ["/usr/local/bin/start-moltbot.sh"]

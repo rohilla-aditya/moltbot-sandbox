@@ -1,48 +1,34 @@
 FROM docker.io/cloudflare/sandbox:0.7.0
 
-# Install Node.js 22 (required by clawdbot) and rsync (for R2 backup sync)
-# The base image has Node 20, we need to replace it with Node 22
-# Using direct binary download for reliability
+# Install Node.js 22 to /opt/node22 instead of overwriting /usr/local
 ENV NODE_VERSION=22.13.1
-RUN apt-get update && apt-get install -y xz-utils ca-certificates rsync \
+RUN apt-get update && apt-get install -y --no-install-recommends xz-utils ca-certificates rsync \
     && curl -fsSLk https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz -o /tmp/node.tar.xz \
-    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+    && mkdir -p /opt/node22 \
+    && tar -xJf /tmp/node.tar.xz -C /opt/node22 --strip-components=1 \
     && rm /tmp/node.tar.xz \
-    && node --version \
-    && npm --version
+    && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm globally
-RUN npm install -g pnpm
+# Put Node 22 first in PATH so clawdbot uses it, but don't remove base image's node
+ENV PATH="/opt/node22/bin:$PATH"
+RUN node --version && npm --version
 
-# Install moltbot (CLI is still named clawdbot until upstream renames)
-# Pin to specific version for reproducible builds
-RUN npm install -g clawdbot@2026.1.24-3 \
+# Install pnpm and clawdbot using Node 22
+RUN npm install -g pnpm \
+    && npm install -g clawdbot@2026.1.24-3 \
     && clawdbot --version
 
-# Create moltbot directories (paths still use clawdbot until upstream renames)
-# Templates are stored in /root/.clawdbot-templates for initialization
-RUN mkdir -p /root/.clawdbot \
-    && mkdir -p /root/.clawdbot-templates \
-    && mkdir -p /root/clawd \
-    && mkdir -p /root/clawd/skills
+# Create directories
+RUN mkdir -p /root/.clawdbot /root/.clawdbot-templates /root/clawd/skills
 
-# Copy startup script
-# Build cache bust: 2026-01-28-v26-browser-skill
+# Copy files
 COPY start-moltbot.sh /usr/local/bin/start-moltbot.sh
 RUN chmod +x /usr/local/bin/start-moltbot.sh
-
-# Copy default configuration template
 COPY moltbot.json.template /root/.clawdbot-templates/moltbot.json.template
-
-# Copy custom skills
 COPY skills/ /root/clawd/skills/
 
-# Set working directory
 WORKDIR /root/clawd
-
-# Expose the gateway port
 EXPOSE 18789
 
-# At the end of your Dockerfile
 ENTRYPOINT ["/sandbox"]
 CMD ["/usr/local/bin/start-moltbot.sh"]

@@ -30,4 +30,4 @@ COPY skills/ /root/clawd/skills/
 WORKDIR /root/clawd
 EXPOSE 18789
 
-ENTRYPOINT ["/sandbox"]
+ENTRYPOINT ["/container-server/sandbox"]

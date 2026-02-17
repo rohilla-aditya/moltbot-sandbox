@@ -391,25 +391,19 @@ debug.get('/container-config', async (c) => {
   }
 });
 
-// GET /debug/devices-approve-all - Approve all pending device pairings
-debug.get('/devices-approve-all', async (c) => {
+// GET /debug/devices-list - List pending and paired devices
+debug.get('/devices-list', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    // List pending devices
+    // List devices
     const listProc = await sandbox.startProcess('clawdbot devices list --json --url ws://localhost:18789');
     await new Promise(r => setTimeout(r, 3000));
     const listLogs = await listProc.getLogs();
 
-    // Approve all
-    const approveProc = await sandbox.startProcess('clawdbot devices approve --all --url ws://localhost:18789');
-    await new Promise(r => setTimeout(r, 3000));
-    const approveLogs = await approveProc.getLogs();
-
     return c.json({
-      pending: listLogs.stdout || '',
-      approval_stdout: approveLogs.stdout || '',
-      approval_stderr: approveLogs.stderr || '',
+      stdout: listLogs.stdout || '',
+      stderr: listLogs.stderr || '',
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

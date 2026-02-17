@@ -108,8 +108,15 @@ export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): P
     console.error('[Gateway] waitForPort failed:', e);
     try {
       const logs = await process.getLogs();
-      console.error('[Gateway] startup failed. Stderr:', logs.stderr);
-      console.error('[Gateway] startup failed. Stdout:', logs.stdout);
+      console.error('[Gateway] ========== PROCESS FAILED ==========');
+      console.error('[Gateway] Exit code:', process.exitCode);
+      console.error('[Gateway] Status:', process.status);
+      console.error('[Gateway] Command:', process.command);
+      console.error('[Gateway] ========== STDOUT ==========');
+      console.error(logs.stdout || '(empty)');
+      console.error('[Gateway] ========== STDERR ==========');
+      console.error(logs.stderr || '(empty)');
+      console.error('[Gateway] ===============================');
       throw new Error(`Moltbot gateway failed to start. Stderr: ${logs.stderr || '(empty)'}`);
     } catch (logErr) {
       console.error('[Gateway] Failed to get logs:', logErr);

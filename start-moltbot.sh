@@ -192,6 +192,10 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
     config.channels.telegram.botToken = process.env.TELEGRAM_BOT_TOKEN;
     config.channels.telegram.enabled = true;
     config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+    if (process.env.TELEGRAM_ALLOWED_USERS) {
+        const ids = process.env.TELEGRAM_ALLOWED_USERS.split(',').map(id => parseInt(id.trim(), 10)).filter(Boolean);
+        config.channels.telegram.allowlist = ids;
+    }
 }
 
 // Discord configuration

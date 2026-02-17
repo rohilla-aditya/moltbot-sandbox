@@ -167,6 +167,17 @@ if (config.models?.providers?.anthropic?.models) {
     }
 }
 
+// Clean up known invalid channel fields from previous runs
+// (these fields were written by mistake and cause clawdbot to reject the config)
+if (config.channels?.telegram) {
+    delete config.channels.telegram.dm;
+    delete config.channels.telegram.allowlist;
+}
+if (config.channels?.discord) {
+    delete config.channels.discord.dm;
+    delete config.channels.discord.allowlist;
+}
+
 
 
 // Gateway configuration

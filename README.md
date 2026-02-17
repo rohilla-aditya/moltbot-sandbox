@@ -31,6 +31,39 @@ The following Cloudflare features used by this project have free tiers:
 
 This project packages OpenClaw to run in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) container, providing a fully managed, always-on deployment without needing to self-host. Optional R2 storage enables persistence across container restarts.
 
+## Project Structure
+
+```
+moltbot-sandbox/
+├── src/
+│   ├── index.ts              # Main Worker entry point (routing, proxy, cron)
+│   ├── types.ts              # TypeScript types & env bindings
+│   ├── config.ts             # Constants (ports, timeouts, paths)
+│   ├── auth.ts               # Cloudflare Access JWT middleware
+│   ├── routes/
+│   │   ├── api.ts            # /api/admin/* — devices, storage, gateway restart
+│   │   ├── public.ts         # /api/status, /logo.png (no auth required)
+│   │   ├── admin-ui.ts       # /_admin/ — serves React admin app
+│   │   ├── debug.ts          # /debug/* — container introspection (DEBUG_ROUTES=true)
+│   │   └── cdp.ts            # /cdp — Chrome DevTools Protocol shim
+│   ├── gateway/
+│   │   ├── process.ts        # ensureMoltbotGateway, findExistingMoltbotProcess
+│   │   ├── r2.ts             # mountR2Storage (s3fs mount into container)
+│   │   ├── sync.ts           # syncToR2 (rsync config → R2 bucket)
+│   │   ├── env.ts            # buildEnvVars (Worker secrets → container env vars)
+│   │   └── utils.ts          # waitForProcess helper
+│   └── client/               # React admin UI (Vite build → dist/client/)
+│       ├── api.ts            # API client for admin routes
+│       └── pages/AdminPage.tsx
+├── Dockerfile                # Container image (cloudflare/sandbox + Node 22 + clawdbot)
+├── start-moltbot.sh          # Startup: restore R2 → write config → validate → start gateway
+├── validate-config.sh        # Local validator — run before deploying to catch config errors
+├── moltbot.json.template     # Base clawdbot config template
+├── wrangler.jsonc            # Cloudflare config (container, R2, cron, durable objects)
+└── .github/workflows/
+    └── deploy.yml            # Auto-deploy on push to main
+```
+
 ## Architecture
 
 ![moltworker architecture](./assets/architecture.png)
@@ -128,6 +161,23 @@ If you prefer more control, you can manually create an Access application:
 5. Add paths to protect: `/_admin/*`, `/api/*`, `/debug/*`
 6. Configure your desired identity providers (e.g., email OTP, Google, GitHub)
 7. Copy the **Application Audience (AUD)** tag and set the secrets as shown above
+
+### Local Config Validation
+
+Before deploying, validate your config locally to catch errors early:
+
+```bash
+# Install clawdbot locally (one-time)
+npm install -g clawdbot
+
+# Run the validator with your env vars
+TELEGRAM_BOT_TOKEN=your_token \
+TELEGRAM_DM_POLICY=allowlist \
+TELEGRAM_ALLOWED_USERS=your_user_id \
+./validate-config.sh
+```
+
+This generates the same config that `start-moltbot.sh` produces, starts the gateway in dev mode on port 19001, confirms it boots cleanly, then shuts it down. Catches config schema errors (like unrecognized fields) before they cause production failures.
 
 ### Local Development
 
@@ -237,18 +287,42 @@ The admin UI requires Cloudflare Access authentication (or `DEV_MODE=true` for l
 
 Debug endpoints are available at `/debug/*` when enabled (requires `DEBUG_ROUTES=true` and Cloudflare Access):
 
-- `GET /debug/processes` - List all container processes
-- `GET /debug/logs?id=<process_id>` - Get logs for a specific process
-- `GET /debug/version` - Get container and moltbot version info
+| Endpoint | Description |
+|----------|-------------|
+| `GET /debug/version` | clawdbot and Node versions inside container |
+| `GET /debug/processes?logs=true` | All container processes with optional stdout/stderr |
+| `GET /debug/logs?id=<pid>` | Logs for a specific process (defaults to gateway) |
+| `GET /debug/cli?cmd=<cmd>` | Run arbitrary commands inside the container |
+| `GET /debug/container-config` | Current clawdbot.json inside the container |
+| `GET /debug/devices-list` | Pending + paired devices via clawdbot CLI |
+| `GET /debug/clear-r2-config` | Wipe R2 backup (forces fresh config on next restart) |
+| `GET /debug/gateway-api?path=<path>` | Probe the gateway HTTP API directly |
+| `GET /debug/ws-test` | Interactive WebSocket debug page |
+| `GET /debug/env` | Sanitized view of which secrets are configured |
 
 ## Optional: Chat Channels
 
 ### Telegram
 
 ```bash
+# Bot token from @BotFather
 npx wrangler secret put TELEGRAM_BOT_TOKEN
+
+# DM policy: allowlist (recommended), open, pairing, or disabled
+npx wrangler secret put TELEGRAM_DM_POLICY
+# Enter: allowlist
+
+# Your Telegram user ID (get from @userinfobot) — required for allowlist
+npx wrangler secret put TELEGRAM_ALLOWED_USERS
+# Enter: your_numeric_user_id
+
 npm run deploy
 ```
+
+After deploying, click **Restart Gateway** in the admin UI (`/_admin/`) to reload the config.
+
+> **Note:** `allowFrom` format is `tg:USER_ID` (handled automatically by `start-moltbot.sh`).
+> The `allowlist` field is **not** valid — clawdbot uses `allowFrom`.
 
 ### Discord
 
@@ -374,9 +448,10 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `R2_SECRET_ACCESS_KEY` | No | R2 secret key for persistent storage |
 | `CF_ACCOUNT_ID` | No | Cloudflare account ID (required for R2 storage) |
 | `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
-| `TELEGRAM_DM_POLICY` | No | Telegram DM policy: `pairing` (default) or `open` |
+| `TELEGRAM_DM_POLICY` | No | Telegram DM policy: `allowlist` (default), `open`, `pairing`, or `disabled` |
+| `TELEGRAM_ALLOWED_USERS` | No | Comma-separated Telegram user IDs (required for `allowlist` policy) |
 | `DISCORD_BOT_TOKEN` | No | Discord bot token |
-| `DISCORD_DM_POLICY` | No | Discord DM policy: `pairing` (default) or `open` |
+| `DISCORD_DM_POLICY` | No | Discord DM policy: `allowlist`, `open`, `pairing` (default), or `disabled` |
 | `SLACK_BOT_TOKEN` | No | Slack bot token |
 | `SLACK_APP_TOKEN` | No | Slack app token |
 | `CDP_SECRET` | No | Shared secret for CDP endpoint authentication (see [Browser Automation](#optional-browser-automation-cdp)) |

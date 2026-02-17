@@ -296,6 +296,19 @@ console.log('Config:', JSON.stringify(config, null, 2));
 EOFNODE
 
 # ============================================================
+# VALIDATE CONFIG
+# ============================================================
+echo "Validating clawdbot config..."
+# Use doctor in non-interactive mode - it will report config errors and exit non-zero if fatal
+if clawdbot doctor --non-interactive 2>&1; then
+    echo "Config validation passed."
+else
+    echo "WARNING: clawdbot doctor reported issues. Dumping config for debugging:"
+    cat "$CONFIG_FILE"
+    # Don't exit - doctor may report non-fatal warnings; gateway will give the real error
+fi
+
+# ============================================================
 # START GATEWAY
 # ============================================================
 # Note: R2 backup sync is handled by the Worker's cron trigger

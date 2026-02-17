@@ -125,6 +125,23 @@ app.use('*', async (c, next) => {
 app.use('*', async (c, next) => {
   const options = buildSandboxOptions(c.env);
   const sandbox = getSandbox(c.env.Sandbox, 'moltbot-v3', options);
+
+  // Force container restart if it's in a bad state
+  try {
+    const state = await sandbox.getState();
+    if (state.status === 'error' || state.status === 'crashed') {
+      console.log('[RESTART] Container in bad state, destroying:', state.status);
+      await sandbox.destroy();
+    }
+  } catch (e) {
+    console.log('[RESTART] Error checking state, will try destroy:', e);
+    try {
+      await sandbox.destroy();
+    } catch (destroyErr) {
+      console.log('[RESTART] Destroy failed (may not exist):', destroyErr);
+    }
+  }
+
   c.set('sandbox', sandbox);
   await next();
 });

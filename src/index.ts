@@ -124,7 +124,7 @@ app.use('*', async (c, next) => {
 // Middleware: Initialize sandbox for all requests
 app.use('*', async (c, next) => {
   const options = buildSandboxOptions(c.env);
-  const sandbox = getSandbox(c.env.Sandbox, 'moltbot-v3', options);
+  const sandbox = getSandbox(c.env.Sandbox, 'moltbot-v4', options);
 
   // Force container restart if it's in a bad state
   try {
@@ -408,7 +408,7 @@ async function scheduled(
   _ctx: ExecutionContext
 ): Promise<void> {
   const options = buildSandboxOptions(env);
-  const sandbox = getSandbox(env.Sandbox, 'moltbot-v3', options);
+  const sandbox = getSandbox(env.Sandbox, 'moltbot-v4', options);
 
   console.log('[cron] Starting backup sync to R2...');
   const result = await syncToR2(sandbox, env);

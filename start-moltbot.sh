@@ -171,11 +171,11 @@ if (config.models?.providers?.anthropic?.models) {
 // (these fields were written by mistake and cause clawdbot to reject the config)
 if (config.channels?.telegram) {
     delete config.channels.telegram.dm;
-    delete config.channels.telegram.allowlist;
+    delete config.channels.telegram.allowlist;  // wrong field name (correct is allowFrom)
 }
 if (config.channels?.discord) {
     delete config.channels.discord.dm;
-    delete config.channels.discord.allowlist;
+    delete config.channels.discord.allowlist;  // wrong field name (correct is allowFrom)
 }
 
 
@@ -199,11 +199,20 @@ if (process.env.CLAWDBOT_DEV_MODE === 'true') {
 
 // Telegram configuration (reset object to avoid stale fields from R2 backup)
 if (process.env.TELEGRAM_BOT_TOKEN) {
-    config.channels.telegram = {
+    const dmPolicy = process.env.TELEGRAM_DM_POLICY || 'allowlist';
+    const tg = {
         botToken: process.env.TELEGRAM_BOT_TOKEN,
         enabled: true,
-        dmPolicy: process.env.TELEGRAM_DM_POLICY || 'open',
+        dmPolicy,
     };
+    // allowFrom is required for dmPolicy 'allowlist' and 'open'
+    // Format: 'tg:USER_ID' for specific users, '*' for everyone
+    if (dmPolicy === 'open') {
+        tg.allowFrom = ['*'];
+    } else if (dmPolicy === 'allowlist' && process.env.TELEGRAM_ALLOWED_USERS) {
+        tg.allowFrom = process.env.TELEGRAM_ALLOWED_USERS.split(',').map(id => `tg:${id.trim()}`);
+    }
+    config.channels.telegram = tg;
 }
 
 // Discord configuration (reset object to avoid stale fields from R2 backup)

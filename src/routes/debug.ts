@@ -411,4 +411,25 @@ debug.get('/devices-list', async (c) => {
   }
 });
 
+// GET /debug/clear-r2-config - Clear R2 backup to force fresh config generation
+debug.get('/clear-r2-config', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    // Remove the R2 backup so gateway starts fresh
+    const clearProc = await sandbox.startProcess('rm -rf /data/moltbot/clawdbot /data/moltbot/.last-sync');
+    await new Promise(r => setTimeout(r, 2000));
+    const clearLogs = await clearProc.getLogs();
+
+    return c.json({
+      message: 'R2 config backup cleared. Restart gateway to generate fresh config.',
+      stdout: clearLogs.stdout || '',
+      stderr: clearLogs.stderr || '',
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
 export { debug };

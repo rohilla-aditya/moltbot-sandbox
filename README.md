@@ -68,6 +68,36 @@ moltbot-sandbox/
 
 ![moltworker architecture](./assets/architecture.png)
 
+## Development Workflow
+
+> **CRITICAL:** Always validate config locally before deploying to avoid production failures.
+
+### Before Every Deploy
+
+```bash
+# 1. Set your environment variables
+export TELEGRAM_BOT_TOKEN=your_token
+export TELEGRAM_DM_POLICY=allowlist
+export TELEGRAM_ALLOWED_USERS=your_user_id
+
+# 2. Run local validation (catches config errors in 30 seconds)
+./validate-config.sh
+
+# 3. If validation passes, deploy
+git add .
+git commit -m "your changes"
+git push  # GHA auto-deploys
+```
+
+**Why this matters:** The container startup script uses bash heredocs with Node.js to generate config. Syntax errors, unquoted heredocs, invalid field names, or missing required fields will cause the gateway to fail with `exit code 1`. Local validation catches these issues before they reach production.
+
+### After Deploy
+
+1. Wait for GitHub Actions deploy to finish (~3 minutes)
+2. Visit `/_admin/` and click **Restart Gateway**
+3. Check for errors in the red banner — if none, gateway is running
+4. Test your integration (Telegram DM, WebSocket connection, etc.)
+
 ## Quick Start
 
 _Cloudflare Sandboxes are available on the [Workers Paid plan](https://dash.cloudflare.com/?to=/:account/workers/plans)._
@@ -162,22 +192,35 @@ If you prefer more control, you can manually create an Access application:
 6. Configure your desired identity providers (e.g., email OTP, Google, GitHub)
 7. Copy the **Application Audience (AUD)** tag and set the secrets as shown above
 
-### Local Config Validation
+### Local Config Validation ⚠️ REQUIRED
 
-Before deploying, validate your config locally to catch errors early:
+> **ALWAYS run this before `git push`** — saves hours of debugging production `exit code 1` failures.
 
 ```bash
-# Install clawdbot locally (one-time)
+# Install clawdbot locally (one-time setup)
 npm install -g clawdbot
 
-# Run the validator with your env vars
+# Before every deploy: validate your config
 TELEGRAM_BOT_TOKEN=your_token \
 TELEGRAM_DM_POLICY=allowlist \
 TELEGRAM_ALLOWED_USERS=your_user_id \
 ./validate-config.sh
 ```
 
-This generates the same config that `start-moltbot.sh` produces, starts the gateway in dev mode on port 19001, confirms it boots cleanly, then shuts it down. Catches config schema errors (like unrecognized fields) before they cause production failures.
+**What it does:**
+1. Generates the exact config that `start-moltbot.sh` will produce in production
+2. Runs `clawdbot doctor` to validate the config schema
+3. Starts the gateway in dev mode (port 19001) to verify it boots without errors
+4. Reports success or shows the exact error clawdbot would throw in production
+
+**What it catches:**
+- Bash syntax errors (unquoted heredocs mangling JavaScript)
+- Invalid field names (`allowlist` vs `allowFrom`)
+- Missing required fields (`allowFrom` required for `dmPolicy: allowlist`)
+- Invalid field values (`dmPolicy: approval` not in allowed list)
+- Unrecognized keys that cause config validation failures
+
+**If validation fails:** Fix the issue, re-run validation, then deploy. **Never skip this step.**
 
 ### Local Development
 
@@ -470,6 +513,21 @@ OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 3. **Device Pairing** - Each device (browser, CLI, chat platform DM) must be explicitly approved via the admin UI before it can interact with the assistant. This is the default "pairing" DM policy.
 
 ## Troubleshooting
+
+**`ProcessExitedBeforeReadyError: Process exited with code 1`** — The most common error. Gateway startup script failed. To diagnose:
+
+1. Check live logs: `npx wrangler tail --format pretty` (then click Restart Gateway)
+2. Look for the actual error in stdout/stderr — common causes:
+   - **Config validation error**: `channels.telegram.allowFrom: dmPolicy="open" requires allowFrom to include "*"`
+     - Fix: Set correct env vars, run `./validate-config.sh` locally first
+   - **Syntax error in start-moltbot.sh**: Unquoted heredocs causing bash to mangle JavaScript
+     - Fix: Use `<< 'EOFNODE'` not `<< EOFNODE` for heredocs containing template strings
+   - **Unrecognized config field**: `Unrecognized key: "allowlist"` (should be `allowFrom`)
+     - Fix: Check clawdbot docs for correct field names, run local validation
+   - **Missing required field**: `allowFrom required for dmPolicy allowlist`
+     - Fix: Set `TELEGRAM_ALLOWED_USERS` secret
+3. Clear bad R2 backup if needed: Visit `/debug/clear-r2-config` in browser
+4. Always run `./validate-config.sh` locally before deploying
 
 **`npm run dev` fails with an `Unauthorized` error:** You need to enable Cloudflare Containers in the [Containers dashboard](https://dash.cloudflare.com/?to=/:account/workers/containers)
 
